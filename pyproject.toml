@@ -1,0 +1,20 @@
+[project]
+name = "pybiomech"
+version = "1.1.0"
+description = "A python package for constructing and simulating biomechanical models"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.5",
+    "jupyter>=1.1.1",
+    "manim>=0.18.1",
+    "matplotlib>=3.9.2",
+    "numpy>=2.1.3",
+    "pandas>=2.2.3",
+    "scipy>=1.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+]

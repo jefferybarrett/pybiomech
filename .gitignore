@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# other stuff
+**/__pycache__/
+**/.ipynb_checkpoints
+**/.pytest_cache
+**/.ruff_cache
+
+
+# Virtual environments
+.venv
+
