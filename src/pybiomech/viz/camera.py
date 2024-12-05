@@ -1,7 +1,8 @@
 import numpy as np
-from .constants import *
 import pyglet
+from pybiomech.viz.constants import *
 from pyglet.math import Mat4
+
 
 class Camera(object):
     

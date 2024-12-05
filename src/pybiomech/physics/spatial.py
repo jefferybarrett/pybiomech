@@ -1,14 +1,7 @@
 import numpy as np
 from numbers import Number
-
-# I think we're ready for sub-modules here.
-
-
-# perhaps this is the way to go.
-class Frame:
-    def __init__(self, origin = np.zeros(3), orientation = np.eye(3)):
-        self.origin = origin
-        self.orientaiton = orientation
+from pybiomech.physics.frame import Frame
+from pybiomech.utils.math_utils import xprod_mat, xlt, rot
 
 # maybe something like this is warranted? Not sure!
 class SpatialVector:
@@ -23,6 +16,10 @@ class SpatialVector:
         """Create a SpatialVector from linear and angular components."""
         assert len(linear) == 3 and len(angular) == 3
         return cls(np.hstack((angular, linear)))
+    
+    def to_linear_angular(self):
+        angular, linear = self.vec[0:3], self.vec[3:]
+        return linear, angular
     
     def __add__(self, other):
         if isinstance(other, type(self)):
@@ -40,18 +37,37 @@ class SpatialVector:
         raise TypeError("Multiplication is only supported with a scalar.")
 
     def __repr__(self):
-        return f"SpatialVector({self.vec})"
+        return f"{type(self).__name__}({self.vec})"
     
     def dot(self, other):
         if isinstance(other, SpatialVector):
             return np.dot(self.vec, other.vec)
         raise TypeError("Dot product requires another SpatialVector.")
 
+    def wedge(self):
+        lin, ang = self.to_linear_angular()
+        return SpatialMatrix(np.block([[xprod_mat(ang), np.zeros((3,3))], [xprod_mat(lin), xprod_mat(ang)]]))
+
+    def wedge_star(self):
+        return -self.wedge().T
+
+    def cross(self, other):
+        raise NotImplementedError("Cross product is only defined with SpatialMotion and SpatialForce vectors")
+
+    def cross_star(self, other):
+        raise NotImplementedError("Still working on this!")
+
     def norm(self):
         return np.linalg.norm(self.vec)
 
+
     
 class SpatialForce(SpatialVector):
+
+    @classmethod
+    def from_spatial(vec:SpatialVector):
+        return SpatialForce(vec.vec)
+
     def dot(self, other):
         if isinstance(other, SpatialMotion):
             return np.dot(self.vec, other.vec)
@@ -59,6 +75,11 @@ class SpatialForce(SpatialVector):
 
 
 class SpatialMotion(SpatialVector):
+
+    @classmethod
+    def from_spatial(vec:SpatialVector):
+        return SpatialMotion(vec.vec)
+
     def dot(self, other):
         if isinstance(other, SpatialForce):
             return np.dot(self.vec, other.vec)
@@ -66,10 +87,15 @@ class SpatialMotion(SpatialVector):
 
 
 
+
 class SpatialMatrix:
     def __init__(self, mat=np.eye(6)):
         assert mat.shape == (6, 6), "A SpatialMatrix must be a 6x6 matrix."
         self.mat = np.array(mat, dtype=float)
+
+    @property
+    def T(self):
+        return SpatialMatrix(self.mat.T)
 
     def __add__(self, other):
         if isinstance(other, SpatialMatrix):
@@ -81,50 +107,55 @@ class SpatialMatrix:
             return type(self)(self.mat * other)
         if isinstance(other, SpatialVector):
             return SpatialVector(self.mat @ other.vec) # we will note that this will change the outcome for an inertia matrix
+        if isinstance(other, SpatialMatrix):
+            return SpatialMatrix(self.mat @ other.mat)
         raise TypeError(f"Multiplication not supported with type {type(other).__name__}.")
     
     def __rmul__(self, other):
         if isinstance(other, Number):
             return self.__mul__(other)
+        
+    def __neg__(self):
+        return SpatialMatrix(-self.mat)
 
     def __repr__(self):
         return f"{type(self).__name__}(\n{self.mat}\n)"
 
 
+class SpatialInertia(SpatialMatrix):
+
+    def __init__(self, mass = 1.0, inertia_tensor = np.eye(3)):
+        self.mass = mass
+        self.inertia_tensor = inertia_tensor
+        raise NotImplementedError("TODO: Finish implementing the SpatialInertia class")
 
 
-
-class CoordinateTransformation:
+class CoordinateTransformation(SpatialMatrix):
     
     def __init__(self, rotation = np.eye(3), translation = np.zeros(3)):
         self.rotation = rotation
         self.r = translation
 
+    def get_transformation_from(A : Frame, to: Frame):
+        rel_rotation = to.orientaiton.T @ A.orientaiton
+        rel_displacement = to.origin - A.origin
+        return CoordinateTransformation(rel_rotation, rel_displacement)
+
     @property
     def motionTransform(self):
-        zeromat = np.zeros((3,3))
-        rx, ry, rz = self.r
-        xprod_mat = np.array([
-            [0, -rz, ry],   # First row
-            [rz, 0, -rx],   # Second row
-            [-ry, rx, 0]    # Third row
-        ])
-        rot6x6 = np.vstack([np.hstack([self.rotation,zeromat]), np.hstack([zeromat, self.rotation])])
-        xprod_part = np.vstack([np.hstack([np.eye(3), zeromat]), np.hstack([-xprod_mat, np.eye(3)])])
-        return rot6x6 @ xprod_part
+        return rot(self.rotation) @ xlt(self.r)
     
     @property
+    def motionInverse(self):
+        return xlt(-self.r) @ rot(self.rotation.T)
+
+    @property
     def forceTransform(self):
-        zeromat = np.zeros((3,3))
-        rx, ry, rz = self.r
-        xprod_mat = np.array([
-            [0, -rz, ry],
-            [rz, 0, -rx],
-            [-ry, rx, 0]  
-        ])
-        rot6x6 = np.vstack([np.hstack([self.rotation,zeromat]), np.hstack([zeromat, self.rotation])])
-        xprod_part = np.vstack([np.hstack([np.eye(3), -xprod_mat]), np.hstack([zeromat, np.eye(3)])])
-        return rot6x6 @ xprod_part
+        return rot(self.rotation) @ xlt(-self.r).T
+    
+    @property
+    def forceInverse(self):
+        return xlt(self.r).T @ rot(self.rotation.T)
     
     def __matmul__(self, other):
         if isinstance(other, SpatialMotion):
@@ -132,17 +163,16 @@ class CoordinateTransformation:
         elif isinstance(other, SpatialForce):
             return SpatialForce(self.forceTransform @ other.vec)
         raise TypeError(f"Coordinate Transforms must act on SpatialForces or SpatialMotions and not {type(other).__name__}.")
-            
-
-
+    
 
 if __name__ == "__main__":
     print("Testing this module!")
-    force = SpatialForce.from_linear_angular([0, 0, 10], [0, 0, 1])
-    motion = SpatialMotion.from_linear_angular([0, 0, 10], [0, 0, 1])
-    X = CoordinateTransformation(translation = np.array([0, 1, 1]))
     
-    print(X @ motion)
+    force = SpatialForce.from_linear_angular(np.random.rand(3), np.random.rand(3))
+    motion = SpatialMotion.from_linear_angular(np.random.rand(3), np.random.rand(3))
+
+    print(force)
+    print(force.wedge_star())
 
 
 

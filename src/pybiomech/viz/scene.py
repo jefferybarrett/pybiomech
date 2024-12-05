@@ -1,5 +1,5 @@
 import pyglet
-from pyglet.batch import Batch
+from pyglet.graphics import Batch
 from pyglet.gl import *
 from .animations import *
 from pybiomech.viz.camera import Camera
@@ -13,7 +13,11 @@ class Scene(pyglet.window.Window):
         self.is_playing = False
         self.record = kwargs.get("record", False)  # Option to record animations
         self.camera = None
+        self.objects = []
     
+    def add(self, obj):
+        self.objects.append(obj)
+
     def on_draw(self):
         """
         Renders the scene.
@@ -21,6 +25,10 @@ class Scene(pyglet.window.Window):
         self.clear()
         glClearColor(0.1, 0.1, 0.1, 1.0)  # Background color
         
+        # draw in the objects that are not in the batch already
+        for obj in self.objects:
+            obj.draw()
+
         # draw opaque objects
         self.opaque_batch.draw()
         
