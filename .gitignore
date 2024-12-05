@@ -6,12 +6,16 @@ dist/
 wheels/
 *.egg-info
 
+
 # other stuff
 **/__pycache__/
 **/.ipynb_checkpoints
 **/.pytest_cache
 **/.ruff_cache
 
+# mac stuff
+*.DS_Store
+**/.DS_Store
 
 # Virtual environments
 .venv
