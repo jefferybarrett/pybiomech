@@ -22,4 +22,6 @@ wheels/
 
 # uv specific things
 hello.py
-
+uv.lock
+.python-version
+*.ipynb
