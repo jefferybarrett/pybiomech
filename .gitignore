@@ -20,3 +20,6 @@ wheels/
 # Virtual environments
 .venv
 
+# uv specific things
+hello.py
+

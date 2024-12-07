@@ -3,8 +3,12 @@ from pyglet.graphics import Batch
 from pyglet.gl import *
 from .animations import *
 from pybiomech.viz.camera import Camera
+from pybiomech.viz.constants import *
+from matplotlib import colors
 
 class Scene(pyglet.window.Window):
+    # TODO: take a background colour as an argument
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.opaque_batch = Batch()  # For objects with alpha = 1.0

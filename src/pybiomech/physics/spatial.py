@@ -40,16 +40,19 @@ class SpatialVector:
         return f"{type(self).__name__}({self.vec})"
     
     def __eq__(self, other):
-        return isinstance(other, type(self)) and np.all(self.vec == other.vec)
+        return (self.vec == other.vec) if isinstance(other, type(self)) else False
+    
+    def __ne__(self, other):
+        return (self.vec != other.vec) if isinstance(other, type(self)) else True
     
     def copy(self):
         return type(self)(self.vec.copy())
 
     def is_approximately(self, other, rtol=1e-5, atol=1e-8):
         """Check if two SpatialMatrix instances are approximately equal."""
-        if not isinstance(other, SpatialMatrix):
+        if not isinstance(other, type(self)):
             return False
-        return np.allclose(self.data, other.data, rtol=rtol, atol=atol)
+        return np.allclose(self.vec, other.vec, rtol=rtol, atol=atol)
 
     def dot(self, other):
         if isinstance(other, SpatialVector):
@@ -134,7 +137,10 @@ class SpatialMatrix:
         return f"{type(self).__name__}(\n{self.mat}\n)"
     
     def __eq__(self, other):
-        return isinstance(other, type(self)) and np.all(self.mat == other.mat)
+        return (self.mat == other.mat) if isinstance(other, type(self)) else False
+    
+    def __ne__(self, other):
+        return (self.mat != other.mat) if isinstance(other, type(self)) else True
     
     def is_approximately(self, other, rtol=1e-5, atol=1e-8):
         """Check if two SpatialMatrix instances are approximately equal."""
