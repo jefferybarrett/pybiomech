@@ -12,7 +12,7 @@ def xprod_mat(r):
     ])
 
 def rot(E):
-    return np.block([[E, ZERO_3x3], [E, ZERO_3x3]])
+    return np.block([[E, ZERO_3x3], [ZERO_3x3, E]])
 
 def xlt(r):
     return np.block([[IDENTITY_3x3, ZERO_3x3], [-xprod_mat(r), IDENTITY_3x3]])

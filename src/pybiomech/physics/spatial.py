@@ -39,6 +39,18 @@ class SpatialVector:
     def __repr__(self):
         return f"{type(self).__name__}({self.vec})"
     
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and np.all(self.vec == other.vec)
+    
+    def copy(self):
+        return type(self)(self.vec.copy())
+
+    def is_approximately(self, other, rtol=1e-5, atol=1e-8):
+        """Check if two SpatialMatrix instances are approximately equal."""
+        if not isinstance(other, SpatialMatrix):
+            return False
+        return np.allclose(self.data, other.data, rtol=rtol, atol=atol)
+
     def dot(self, other):
         if isinstance(other, SpatialVector):
             return np.dot(self.vec, other.vec)
@@ -65,7 +77,7 @@ class SpatialVector:
 class SpatialForce(SpatialVector):
 
     @classmethod
-    def from_spatial(vec:SpatialVector):
+    def from_spatial(cls, vec:SpatialVector):
         return SpatialForce(vec.vec)
 
     def dot(self, other):
@@ -77,8 +89,8 @@ class SpatialForce(SpatialVector):
 class SpatialMotion(SpatialVector):
 
     @classmethod
-    def from_spatial(vec:SpatialVector):
-        return SpatialMotion(vec.vec)
+    def from_spatial(cls, sv:SpatialVector):
+        return SpatialMotion(sv.vec)
 
     def dot(self, other):
         if isinstance(other, SpatialForce):
@@ -120,21 +132,30 @@ class SpatialMatrix:
 
     def __repr__(self):
         return f"{type(self).__name__}(\n{self.mat}\n)"
+    
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and np.all(self.mat == other.mat)
+    
+    def is_approximately(self, other, rtol=1e-5, atol=1e-8):
+        """Check if two SpatialMatrix instances are approximately equal."""
+        if not isinstance(other, SpatialMatrix):
+            return False
+        return np.allclose(self.data, other.data, rtol=rtol, atol=atol)
 
 
 class SpatialInertia(SpatialMatrix):
 
-    def __init__(self, mass = 1.0, inertia_tensor = np.eye(3)):
-        self.mass = mass
-        self.inertia_tensor = inertia_tensor
-        raise NotImplementedError("TODO: Finish implementing the SpatialInertia class")
-
+    @classmethod
+    def from_mass_inertia(cls, mass, inertia_tensor):
+        mat = np.block([[inertia_tensor, np.zeros((3,3))], [np.zeros((3,3)), mass * np.eye(3)]])
+        return SpatialInertia(mat)
 
 class CoordinateTransformation(SpatialMatrix):
     
     def __init__(self, rotation = np.eye(3), translation = np.zeros(3)):
         self.rotation = rotation
         self.r = translation
+        self.mat = self.motionTransform
 
     def get_transformation_from(A : Frame, to: Frame):
         rel_rotation = to.orientaiton.T @ A.orientaiton
@@ -162,14 +183,19 @@ class CoordinateTransformation(SpatialMatrix):
             return SpatialMotion(self.motionTransform @ other.vec)
         elif isinstance(other, SpatialForce):
             return SpatialForce(self.forceTransform @ other.vec)
+        elif isinstance(other, SpatialMatrix):
+            raise NotImplementedError("There is probably a rule for transforming a spatial matrix, it is not yet implemented.")
         raise TypeError(f"Coordinate Transforms must act on SpatialForces or SpatialMotions and not {type(other).__name__}.")
     
 
 if __name__ == "__main__":
     print("Testing this module!")
-    
+    from scipy.spatial.transform import Rotation
+
     force = SpatialForce.from_linear_angular(np.random.rand(3), np.random.rand(3))
     motion = SpatialMotion.from_linear_angular(np.random.rand(3), np.random.rand(3))
+
+
 
     print(force)
     print(force.wedge_star())
