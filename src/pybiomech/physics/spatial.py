@@ -3,6 +3,8 @@ from numbers import Number
 from pybiomech.physics.frame import Frame
 from pybiomech.utils.math_utils import xprod_mat, xlt, rot
 
+# TODO: implement the cross product methods for SpatialForces and SpatialMotion
+
 # maybe something like this is warranted? Not sure!
 class SpatialVector:
     def __init__(self, vec=None, frame = Frame()):
@@ -88,7 +90,6 @@ class SpatialForce(SpatialVector):
             return np.dot(self.vec, other.vec)
         raise TypeError("Dot product only makes sense with a MotionVector.")
 
-
 class SpatialMotion(SpatialVector):
 
     @classmethod
@@ -118,12 +119,16 @@ class SpatialMatrix:
         raise TypeError(f"Addition not supported between {type(self).__name__} and {type(other).__name__}.")
 
     def __mul__(self, other):
+        # note a SpatialMatrix will not change the type of vector it acts on
+        # that is to say it sends M6 -> M6, F6 -> F6, and Inertia Tensors -> Inertia Tensors etc.
         if isinstance(other, (int, float)):
             return type(self)(self.mat * other)
+    
+    def __matmul__(self, other):
         if isinstance(other, SpatialVector):
-            return SpatialVector(self.mat @ other.vec) # we will note that this will change the outcome for an inertia matrix
+            return type(other)(self.mat @ other.vec)
         if isinstance(other, SpatialMatrix):
-            return SpatialMatrix(self.mat @ other.mat)
+            return type(other)(self.mat @ other.mat)
         raise TypeError(f"Multiplication not supported with type {type(other).__name__}.")
     
     def __rmul__(self, other):
