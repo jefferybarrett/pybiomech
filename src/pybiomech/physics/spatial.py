@@ -2,8 +2,6 @@ import numpy as np
 from numbers import Number
 from pybiomech.utils.math_utils import *
 
-# TODO: implement the cross product methods for SpatialForces and SpatialMotion
-
 # maybe something like this is warranted? Not sure!
 class SpatialVector:
     def __init__(self, vec=None):
