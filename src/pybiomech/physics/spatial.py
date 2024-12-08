@@ -130,10 +130,15 @@ class SpatialMotion(SpatialVector):
 
 
 class SpatialMatrix:
-    def __init__(self, mat=np.eye(6)):
+    def __init__(self, mat=np.eye(6), domain = SpatialVector, range = SpatialVector):
         assert mat.shape == (6, 6), "A SpatialMatrix must be a 6x6 matrix."
         self.mat = np.array(mat, dtype=float)
+        self.domain = domain
+        self.range = range
 
+    def from_dyad(v1:SpatialVector|SpatialMotion|SpatialForce, v2:SpatialVector|SpatialMotion|SpatialForce):
+        return SpatialMatrix(v1.vec @ v2.vec.T, domain = type(v2), range = type(v1))
+    
     @property
     def T(self):
         return SpatialMatrix(self.mat.T)
@@ -150,10 +155,10 @@ class SpatialMatrix:
             return type(self)(self.mat * other)
     
     def __matmul__(self, other):
-        if isinstance(other, SpatialVector):
-            return type(other)(self.mat @ other.vec)
-        if isinstance(other, SpatialMatrix):
-            return type(other)(self.mat @ other.mat)
+        if isinstance(other, self.domain):
+            return self.range(self.mat @ other.vec)
+        if isinstance(other, SpatialMatrix) and (other.range == self.domain):
+            return type(other)(self.mat @ other.mat, range = self.range, domain = other.domain)
         raise TypeError(f"Multiplication not supported with type {type(other).__name__}.")
     
     def __rmul__(self, other):
@@ -180,6 +185,9 @@ class SpatialMatrix:
 
 
 class SpatialInertia(SpatialMatrix):
+
+    def __init__(self, mat=np.eye(6)):
+        super().__init(mat, domain = SpatialMotion, range = SpatialForce)
 
     @classmethod
     def from_mass_inertia(cls, mass, inertia_tensor):
