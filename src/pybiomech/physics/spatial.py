@@ -1,27 +1,52 @@
 import numpy as np
 from numbers import Number
-from pybiomech.physics.frame import Frame
-from pybiomech.utils.math_utils import xprod_mat, xlt, rot
+from pybiomech.utils.math_utils import *
 
 # TODO: implement the cross product methods for SpatialForces and SpatialMotion
 
 # maybe something like this is warranted? Not sure!
 class SpatialVector:
-    def __init__(self, vec=None, frame = Frame()):
+    def __init__(self, vec=None):
         vec = np.zeros(6) if vec is None else vec
         assert len(vec) == 6, "A SpatialVector must have 6 components."
         self.vec = np.array(vec, dtype=float)
-        self.frame = frame
 
     @classmethod
-    def from_linear_angular(cls, linear, angular):
+    def from_angular_linear(cls, angular, linear):
         """Create a SpatialVector from linear and angular components."""
         assert len(linear) == 3 and len(angular) == 3
         return cls(np.hstack((angular, linear)))
     
-    def to_linear_angular(self):
-        angular, linear = self.vec[0:3], self.vec[3:]
-        return linear, angular
+    @property
+    def angular(self):
+        return self.vec[0:3]
+    
+    @property
+    def linear(self):
+        return self.vec[3:]
+    
+    def to_angular_linear(self):
+        return self.angular, self.linear
+    
+    def is_free(self):
+        """In Featherstone's framework a free vector is one with no angular component.
+        In other words it is a vector with just a linear component.
+        """
+        return np.all(self.angular == 0)
+    
+    def is_line_vector(self):
+        """ In Featherstone's framework, a line vector is one whose linear and angular
+        components are orthogonal to one another.
+        """
+        return (np.dot(self.linear, self.angular) == 0)
+    
+    def free_lin_decompose(self):
+        if not (self.is_free()):
+            h = np.dot(self.angular, self.linear) / np.dot(self.angular, self.angular)
+            line_vector = type(self).from_angular_linear(self.angular, self.linear - h * self.angular)
+            free_vector = type(self).from_angular_linear(ZERO3, h * self.angular)
+            return  free_vector, line_vector
+        raise ZeroDivisionError(f"{self.__repr__} is a Free Vector and cannot be decomposed in this way!")
     
     def __add__(self, other):
         if isinstance(other, type(self)):
@@ -62,23 +87,25 @@ class SpatialVector:
         raise TypeError("Dot product requires another SpatialVector.")
 
     def wedge(self):
-        lin, ang = self.to_linear_angular()
+        ang, lin = self.to_angular_linear()
         return SpatialMatrix(np.block([[xprod_mat(ang), np.zeros((3,3))], [xprod_mat(lin), xprod_mat(ang)]]))
 
     def wedge_star(self):
         return -self.wedge().T
 
     def cross(self, other):
-        raise NotImplementedError("Cross product is only defined with SpatialMotion and SpatialForce vectors")
+        if isinstance(other, SpatialVector):
+            return self.wedge() @ other
 
     def cross_star(self, other):
-        raise NotImplementedError("Still working on this!")
+        if isinstance(other, SpatialVector):
+            return self.wedge_star() @ other
 
     def norm(self):
         return np.linalg.norm(self.vec)
 
 
-    
+
 class SpatialForce(SpatialVector):
 
     @classmethod
@@ -90,6 +117,7 @@ class SpatialForce(SpatialVector):
             return np.dot(self.vec, other.vec)
         raise TypeError("Dot product only makes sense with a MotionVector.")
 
+
 class SpatialMotion(SpatialVector):
 
     @classmethod
@@ -100,7 +128,6 @@ class SpatialMotion(SpatialVector):
         if isinstance(other, SpatialForce):
             return np.dot(self.vec, other.vec)
         raise TypeError("Dot product donly makes sense with a WrenchVector.")
-
 
 
 
@@ -158,58 +185,20 @@ class SpatialInertia(SpatialMatrix):
 
     @classmethod
     def from_mass_inertia(cls, mass, inertia_tensor):
+        """ This will construct a SpatialInertia where mass is its mass and inertia tensor
+        is its inertia tensor evalauted about its centre of mass.
+        """
         mat = np.block([[inertia_tensor, np.zeros((3,3))], [np.zeros((3,3)), mass * np.eye(3)]])
         return SpatialInertia(mat)
-
-class CoordinateTransformation(SpatialMatrix):
-    
-    def __init__(self, rotation = np.eye(3), translation = np.zeros(3)):
-        self.rotation = rotation
-        self.r = translation
-        self.mat = self.motionTransform
-
-    def get_transformation_from(A : Frame, to: Frame):
-        rel_rotation = to.orientaiton.T @ A.orientaiton
-        rel_displacement = to.origin - A.origin
-        return CoordinateTransformation(rel_rotation, rel_displacement)
-
-    @property
-    def motionTransform(self):
-        return rot(self.rotation) @ xlt(self.r)
-    
-    @property
-    def motionInverse(self):
-        return xlt(-self.r) @ rot(self.rotation.T)
-
-    @property
-    def forceTransform(self):
-        return rot(self.rotation) @ xlt(-self.r).T
-    
-    @property
-    def forceInverse(self):
-        return xlt(self.r).T @ rot(self.rotation.T)
     
     def __matmul__(self, other):
         if isinstance(other, SpatialMotion):
-            return SpatialMotion(self.motionTransform @ other.vec)
-        elif isinstance(other, SpatialForce):
-            return SpatialForce(self.forceTransform @ other.vec)
-        elif isinstance(other, SpatialMatrix):
-            raise NotImplementedError("There is probably a rule for transforming a spatial matrix, it is not yet implemented.")
-        raise TypeError(f"Coordinate Transforms must act on SpatialForces or SpatialMotions and not {type(other).__name__}.")
-    
-
-if __name__ == "__main__":
-    print("Testing this module!")
-    from scipy.spatial.transform import Rotation
-
-    force = SpatialForce.from_linear_angular(np.random.rand(3), np.random.rand(3))
-    motion = SpatialMotion.from_linear_angular(np.random.rand(3), np.random.rand(3))
+            return SpatialForce(self.mat @ other.vec)
+        if isinstance(other, SpatialForce):
+            raise TypeError("SpatialInertia must act on a SpatialMotion type object")
 
 
 
-    print(force)
-    print(force.wedge_star())
 
 
 

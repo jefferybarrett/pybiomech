@@ -34,10 +34,10 @@ def test_spatial_arithmetic():
         alpha, beta = np.random.random(2)
 
         # addition should be linear
-        v1 = SpatialVector.from_linear_angular(xlin, xrot)
-        v2 = SpatialVector.from_linear_angular(ylin, yrot)
+        v1 = SpatialVector.from_angular_linear(xrot, xlin)
+        v2 = SpatialVector.from_angular_linear(yrot, ylin)
         lin_combo = alpha * v1 + beta * v2
-        other_lin_combo = SpatialVector.from_linear_angular(alpha * xlin + beta * ylin, alpha * xrot + beta * yrot)
+        other_lin_combo = SpatialVector.from_angular_linear(alpha * xrot + beta * yrot, alpha * xlin + beta * ylin)
         assert np.all(lin_combo == other_lin_combo)
 
         # spatial motions and spatial forces are distinct from spatial vectors
@@ -55,21 +55,6 @@ def test_spatial_arithmetic():
         assert m1.dot(f2) == f2.dot(m1)
 
 
-def test_coord_transforms():
-    for _ in range(100):
-        alpha, beta, gamma = [float(x) for x in 2*np.pi * np.random.rand(3)]
-        R = Rotation.from_euler('xyz', [alpha, beta, gamma]).as_matrix()
-        dr = 100 * (np.random.rand(3) - 0.5)
-        
-        # transformation
-        T_ab = CoordinateTransformation(rotation=R, translation=dr)
-
-        motion = SpatialMotion(100*np.random.rand(6))
-        force = SpatialForce(100*np.random.rand(6))
-        
-        # this is a pretty strong force. The power doesn't depend on the coordinate
-        # system we're analyzing in, so these should always be the same
-        assert np.isclose(motion.dot(force), (T_ab @ motion).dot(T_ab @ force))
 
 def test_spatial_matrix_types():
     """
@@ -85,3 +70,18 @@ def test_spatial_matrix_types():
     assert np.all(I @ m == m)
     assert np.all(I @ f == f)
     assert np.all(I @ inertia == inertia)
+
+def test_free_lin_decomposition():
+    for _ in range(100):
+        v = SpatialVector(100 * np.random.rand(6))
+        free, line = v.free_lin_decompose()
+        assert free.is_free()
+        assert np.isclose(np.dot(line.angular, line.linear), 0.0)
+        
+
+def test_build():
+    linear = 100 * np.random.rand(3)
+    angular = 100 * np.random.rand(3)
+    test = SpatialVector.from_angular_linear(angular, linear)
+    assert np.all(linear == test.linear)
+    assert np.all(angular == test.angular)

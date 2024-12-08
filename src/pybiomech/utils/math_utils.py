@@ -2,6 +2,18 @@ import numpy as np
 
 IDENTITY_3x3 = np.eye(3)
 ZERO_3x3 = np.zeros((3,3))
+ZERO3 = np.zeros(3)
+
+def mat4_from_components(E = IDENTITY_3x3, r = ZERO3):
+    mat4 = np.eye(4)
+    mat4[:3, :3] = E
+    mat4[:3, 3] = r
+    return mat4
+
+def mat4_to_components(mat4):
+     r = mat4[:3, 3]
+     E = mat4[:3, :3]
+     return E, r
 
 def xprod_mat(r):
     x, y, z = r
