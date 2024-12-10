@@ -41,10 +41,10 @@ def test_spatial_arithmetic():
         assert np.all(lin_combo == other_lin_combo)
 
         # spatial motions and spatial forces are distinct from spatial vectors
-        m1 = SpatialMotion.from_spatial(v1)
-        f1 = SpatialForce.from_spatial(v2)
+        m1 = SpatialMotion(v1.vec)
+        f1 = SpatialForce(v2.vec)
         m2 = m1.copy()
-        f2 = SpatialForce.from_spatial(v2)
+        f2 = SpatialForce(v2.vec)
         assert np.all(m1 != v1)
         assert np.all(f1 != v2)
         assert np.all(m1 == m2)
@@ -53,7 +53,6 @@ def test_spatial_arithmetic():
         # now for some known cases
         assert m1.dot(f2) == xlin.dot(ylin) + xrot.dot(yrot)
         assert m1.dot(f2) == f2.dot(m1)
-
 
 
 def test_spatial_matrix_types():
@@ -66,10 +65,13 @@ def test_spatial_matrix_types():
     inertia = SpatialInertia(np.random.rand(6, 6))
     
     I = SpatialMatrix(np.eye(6))
+    I_inertia = SpatialMatrix(np.eye(6), domain = SpatialForce, range = SpatialForce)
+    I_m = SpatialMatrix(np.eye(6), domain = SpatialMotion, range = SpatialMotion)
+    I_f = SpatialMatrix(np.eye(6), domain = SpatialForce, range = SpatialForce)
     assert np.all(I @ v == v)
-    assert np.all(I @ m == m)
-    assert np.all(I @ f == f)
-    assert np.all(I @ inertia == inertia)
+    assert np.all(I_m @ m == m)
+    assert np.all(I_f @ f == f)
+    assert np.all(I_inertia @ inertia == inertia)
 
 def test_free_lin_decomposition():
     for _ in range(100):
@@ -77,7 +79,32 @@ def test_free_lin_decomposition():
         free, line = v.free_lin_decompose()
         assert free.is_free()
         assert np.isclose(np.dot(line.angular, line.linear), 0.0)
-        
+
+def test_is_free():
+    free_v = SpatialVector.from_angular_linear(np.zeros(3), np.ones(3))
+    assert free_v.is_free()
+
+    try:
+        free, line = free_v.free_lin_decompose()
+    except ZeroDivisionError as e:
+        assert "is a Free Vector and cannot be decomposed in this way!" in str(e)
+    else:
+        assert False, "SpecificException was not raised!"
+
+def test_decomposition():
+    ang, lin = np.ones(3), np.ones(3)
+    h = np.dot(ang, lin) / np.dot(ang, ang)
+    ang_prime = ang
+    lin_prime = lin - h * ang
+    free_part = h * ang
+
+    v = SpatialVector.from_angular_linear(ang, lin)
+    free, line = v.free_lin_decompose()
+
+    assert np.all(free.linear == free_part)
+    assert np.all(line == SpatialVector.from_angular_linear(ang_prime, lin_prime))
+
+
 
 def test_build():
     linear = 100 * np.random.rand(3)

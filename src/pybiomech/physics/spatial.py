@@ -2,12 +2,12 @@ import numpy as np
 from numbers import Number
 from pybiomech.utils.math_utils import *
 
-# maybe something like this is warranted? Not sure!
 class SpatialVector:
-    def __init__(self, vec=None):
-        vec = np.zeros(6) if vec is None else vec
+
+    def __init__(self, vec=np.zeros(6)):
         assert len(vec) == 6, "A SpatialVector must have 6 components."
         self.vec = np.array(vec, dtype=float)
+        self.domain = SpatialVector
 
     @classmethod
     def from_angular_linear(cls, angular, linear):
@@ -15,6 +15,10 @@ class SpatialVector:
         assert len(linear) == 3 and len(angular) == 3
         return cls(np.hstack((angular, linear)))
     
+    @classmethod
+    def ones(cls):
+        return cls(np.array([1, 1, 1, 1, 1, 1]))
+
     @property
     def angular(self):
         return self.vec[0:3]
@@ -59,7 +63,6 @@ class SpatialVector:
     def __rmul__(self, other):
         if isinstance(other, Number):
             return self.__mul__(other)
-        raise TypeError("Multiplication is only supported with a scalar.")
 
     def __repr__(self):
         return f"{type(self).__name__}({self.vec})"
@@ -74,7 +77,6 @@ class SpatialVector:
         return type(self)(self.vec.copy())
 
     def is_approximately(self, other, rtol=1e-5, atol=1e-8):
-        """Check if two SpatialMatrix instances are approximately equal."""
         if not isinstance(other, type(self)):
             return False
         return np.allclose(self.vec, other.vec, rtol=rtol, atol=atol)
@@ -86,47 +88,37 @@ class SpatialVector:
 
     def wedge(self):
         ang, lin = self.to_angular_linear()
-        return SpatialMatrix(np.block([[xprod_mat(ang), np.zeros((3,3))], [xprod_mat(lin), xprod_mat(ang)]]))
+        mat = np.block([[xprod_mat(ang), np.zeros((3,3))], [xprod_mat(lin), xprod_mat(ang)]])
+        return SpatialMatrix(mat, domain = self.domain, range = type(self))
 
     def wedge_star(self):
-        return -self.wedge().T
+        return -(self.wedge().T)
 
     def cross(self, other):
-        if isinstance(other, SpatialVector):
-            return self.wedge() @ other
+        return self.wedge() @ other
 
     def cross_star(self, other):
-        if isinstance(other, SpatialVector):
-            return self.wedge_star() @ other
+        return (self.wedge_star()) @ other
 
-    def norm(self):
-        return np.linalg.norm(self.vec)
+    def dot(self, other):
+        if isinstance(other, self.domain):
+            return np.dot(self.vec, other.vec)
+        raise TypeError(f"Dot product for {type(self).__name__} must be with {self.domain.__name__}.")
 
 
 
 class SpatialForce(SpatialVector):
 
-    @classmethod
-    def from_spatial(cls, vec:SpatialVector):
-        return SpatialForce(vec.vec)
-
-    def dot(self, other):
-        if isinstance(other, SpatialMotion):
-            return np.dot(self.vec, other.vec)
-        raise TypeError("Dot product only makes sense with a MotionVector.")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.domain = SpatialMotion
 
 
 class SpatialMotion(SpatialVector):
 
-    @classmethod
-    def from_spatial(cls, sv:SpatialVector):
-        return SpatialMotion(sv.vec)
-
-    def dot(self, other):
-        if isinstance(other, SpatialForce):
-            return np.dot(self.vec, other.vec)
-        raise TypeError("Dot product donly makes sense with a WrenchVector.")
-
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.domain = SpatialForce
 
 
 class SpatialMatrix:
@@ -136,12 +128,16 @@ class SpatialMatrix:
         self.domain = domain
         self.range = range
 
-    def from_dyad(v1:SpatialVector|SpatialMotion|SpatialForce, v2:SpatialVector|SpatialMotion|SpatialForce):
-        return SpatialMatrix(v1.vec @ v2.vec.T, domain = type(v2), range = type(v1))
+    def from_dyad(v1:SpatialVector, v2:SpatialVector):
+        return SpatialMatrix(mat = v1.vec[:,np.newaxis] @ v2.vec[:,np.newaxis].T, domain = v2.domain, range = type(v1))
     
     @property
     def T(self):
-        return SpatialMatrix(self.mat.T)
+        return SpatialMatrix(self.mat.T, domain = self.range, range = self.domain)
+
+    def inv(self):
+        matinv = np.linalg.inv(self.mat)
+        return SpatialMatrix(matinv, domain = self.range, range = self.domain)
 
     def __add__(self, other):
         if isinstance(other, SpatialMatrix):
@@ -158,7 +154,7 @@ class SpatialMatrix:
         if isinstance(other, self.domain):
             return self.range(self.mat @ other.vec)
         if isinstance(other, SpatialMatrix) and (other.range == self.domain):
-            return type(other)(self.mat @ other.mat, range = self.range, domain = other.domain)
+            return SpatialMatrix(self.mat @ other.mat, range = self.range, domain = other.domain)
         raise TypeError(f"Multiplication not supported with type {type(other).__name__}.")
     
     def __rmul__(self, other):
@@ -166,13 +162,16 @@ class SpatialMatrix:
             return self.__mul__(other)
         
     def __neg__(self):
-        return SpatialMatrix(-self.mat)
+        return SpatialMatrix(-self.mat, domain = self.domain, range = self.range)
 
     def __repr__(self):
         return f"{type(self).__name__}(\n{self.mat}\n)"
     
     def __eq__(self, other):
-        return (self.mat == other.mat) if isinstance(other, type(self)) else False
+        if issubclass(type(self), type(other)) and (other.domain == self.domain) and (other.range == self.range):
+            return self.mat == other.mat
+        else:
+            return False
     
     def __ne__(self, other):
         return (self.mat != other.mat) if isinstance(other, type(self)) else True
@@ -187,22 +186,16 @@ class SpatialMatrix:
 class SpatialInertia(SpatialMatrix):
 
     def __init__(self, mat=np.eye(6)):
-        super().__init(mat, domain = SpatialMotion, range = SpatialForce)
+        super().__init__(mat, domain = SpatialMotion, range = SpatialForce)
 
     @classmethod
-    def from_mass_inertia(cls, mass, inertia_tensor):
+    def from_mass_inertia_about_com(cls, mass, inertia_tensor):
         """ This will construct a SpatialInertia where mass is its mass and inertia tensor
         is its inertia tensor evalauted about its centre of mass.
         """
         mat = np.block([[inertia_tensor, np.zeros((3,3))], [np.zeros((3,3)), mass * np.eye(3)]])
         return SpatialInertia(mat)
     
-    def __matmul__(self, other):
-        if isinstance(other, SpatialMotion):
-            return SpatialForce(self.mat @ other.vec)
-        if isinstance(other, SpatialForce):
-            raise TypeError("SpatialInertia must act on a SpatialMotion type object")
-
 
 
 
