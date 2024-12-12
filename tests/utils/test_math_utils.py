@@ -44,4 +44,22 @@ def test_xlt():
     assert np.all(np.isclose(res1, res2))
 
 
+def test_translation_coord_change():
+    r = 1.0
+    dx = np.array([1.0, 0.0, 0.0])
+    omegax, omegay, omegaz = np.random.rand(3)*100 - 50.0
+    vx, vy, vz = 100 * np.random.rand(3) - 50.0
+    angular = np.array([omegax, omegay, omegaz])
+    linear = np.array([vx, vy, vz])
+
+    v0 = np.array([omegax, omegay, omegaz, vx, vy, vz])
+    vP = xlt(r*dx) @ v0
+    
+    angular_new = angular
+    linear_new = linear + np.cross(angular, r*dx)
+    v_new = np.hstack([angular_new, linear_new])
+
+    assert np.all(v_new == vP)
+
+
 
