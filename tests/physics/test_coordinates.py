@@ -121,14 +121,14 @@ def test_spatial_coordinates():
 
 
 def test_spatial_motion_coordinate_transform1():
-    dx = np.array([1.0, 0.0, 0.0])
+    dx = np.array([1.0, 3.0, -2.0])
     ang = np.ones(3)
     lin = np.ones(3)
     m = SpatialMotion.from_angular_linear(ang, lin)
     m_prime = SpatialMotion.from_angular_linear(ang, lin + np.cross(ang, dx))
 
     A = Frame()
-    B = Frame.orient_wrt(A, translation = dx)
+    B = Frame.orient_wrt(A, translation = -dx)
 
     bTa = CoordinateTransformation.between_frames(A, B)
     m_prime_coords = bTa @ m
