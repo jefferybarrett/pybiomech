@@ -9,7 +9,7 @@ class SpatialCoordinates:
         self.frame = frame
 
     def express_in(self, target_frame:Frame):
-        transform = CoordinateTransformation.between_frames(self.frame, target_frame)
+        transform = CoordinateTransformation.between_frames(from_frame=self.frame, to_frame=target_frame)
         return SpatialCoordinates(transform @ self.coords, frame = target_frame)
 
     def __repr__(self):
@@ -27,6 +27,7 @@ class SpatialCoordinates:
 
 class CoordinateTransformation:
     
+    # TODO: make everything agnostic between numpy and sympy
     def __init__(self, translation = np.zeros(3), rotation = np.eye(3)):
         self.rotation = rotation
         self.translation = translation
@@ -48,21 +49,32 @@ class CoordinateTransformation:
         right_side = self.forceInverse if matrix.domain == SpatialForce else self.motionInverse
         return (left_side @ matrix) @ right_side
 
+    def _get_featherstone_equivalent(self):
+        E = self.rotation
+        r = - E.T @ self.translation
+        return E, r
+    
+    # note the translation property in this class refers to homogeneous coordinates
+    # the relevant displacement for SpatialVectors is the negative of this quantity
     @property
     def motionTransform(self):
-        return SpatialMatrix(rot(self.rotation) @ xlt(self.translation), domain = SpatialMotion, range = SpatialMotion)
+        E, r = self._get_featherstone_equivalent()
+        return SpatialMatrix(rot(E) @ xlt(r), domain = SpatialMotion, range = SpatialMotion)
     
     @property
     def motionInverse(self):
-        return SpatialMatrix(xlt(-self.translation) @ rot(self.rotation.T), domain = SpatialMotion, range = SpatialMotion)
+        E, r = self._get_featherstone_equivalent()
+        return SpatialMatrix(xlt(-r) @ rot(E.T), domain = SpatialMotion, range = SpatialMotion)
 
     @property
     def forceTransform(self):
-        return SpatialMatrix(rot(self.rotation) @ xlt(-self.translation).T, domain = SpatialForce, range = SpatialForce)
+        E, r = self._get_featherstone_equivalent()
+        return SpatialMatrix(rot(E) @ xlt(-r).T, domain = SpatialForce, range = SpatialForce)
     
     @property
     def forceInverse(self):
-        return SpatialMatrix(xlt(self.translation).T @ rot(self.rotation.T), domain = SpatialForce, range = SpatialForce)
+        E, r = self._get_featherstone_equivalent()
+        return SpatialMatrix(xlt(r).T @ rot(E.T), domain = SpatialForce, range = SpatialForce)
     
     def inv(self):
         return CoordinateTransformation(-self.rotation.T @ self.translation, self.rotation.T)

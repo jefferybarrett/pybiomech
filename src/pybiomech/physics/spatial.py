@@ -53,12 +53,24 @@ class SpatialVector:
     def __add__(self, other):
         if isinstance(other, type(self)):
             return type(self)(self.vec + other.vec)
+        elif isinstance(other, Number):
+            return type(self)(self.vec + other)
         raise TypeError("Addition is only supported between two SpatialVectors.")
 
+    def __sub__(self, other):
+        if isinstance(other, type(self)):
+            return type(self)(self.vec - other.vec)
+        elif isinstance(other, Number):
+            return type(self)(self.vec - other)
+        raise TypeError("Addition is only supported between two SpatialVectors.")
+    
     def __mul__(self, other):
         if isinstance(other, Number):
             return type(self)(self.vec * other)
         raise TypeError("Multiplication is only supported with a scalar.")
+    
+    def __abs__(self):
+        return type(self)(np.abs(self.vec))
     
     def __rmul__(self, other):
         if isinstance(other, Number):

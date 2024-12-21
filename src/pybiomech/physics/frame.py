@@ -8,8 +8,29 @@ class Frame:
     
     @classmethod
     def orient_wrt(cls, reference:'Frame', rotation = IDENTITY_3x3, translation = ZERO3):
-        transformation_frame = Frame.from_orign_orientation(translation, rotation)
-        return transformation_frame @ reference.inv()
+        """Orient a new Frame relative to an existing frame.
+        rotation and translation specify the transformation that goes from the new frame to 
+        the reference frame. Specifcally we will recover this matrix if we use
+        
+        Parameters:
+        ----------
+            reference: Frame
+                A reference Frame which to base the new frame off of
+            rotation: 3x3 matrix (default is the identity)
+                The relative rotation from the new frame to the existing one
+            translation: 3x1 vector (default is zero)
+                The relative translation from the new frame to the existing one
+        
+        Example:
+            A = Frame()
+            B = Frame.orient_wrt(A, rotation, translation)
+            b2a = CoordinateTransformation.between_frames(from_frame = B, to_frame = A)
+            # b2a.translation == translation
+            # b2a.rotation == rotation
+        """
+        new_origin = reference.origin + reference.orientation @ translation
+        new_orientation = reference.orientation @ rotation
+        return cls.from_orign_orientation(new_origin, new_orientation)
 
     @classmethod
     def from_orign_orientation(cls, origin = ZERO3, orientation = IDENTITY_3x3):
@@ -34,6 +55,7 @@ class Frame:
     def orientation(self):
         """Returns the orientation (direction cosine matrix) of the frame."""
         return self._mat4[:3, :3]
+    
     
     def as_origin_orientation(self):
         return self.origin, self.orientation

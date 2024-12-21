@@ -50,8 +50,20 @@ def test_frame_construction():
     A = Frame.orient_wrt(G, rotation, translation)
 
     mat4 = mat4_from_translation_rotation(translation, rotation)
-    T = CoordinateTransformation.between_frames(G, A)
+    T = CoordinateTransformation.between_frames(A, G)
     assert np.all(np.isclose(T.mat, mat4))
+
+def test_frame_construction2():
+    rotation = Rotation.from_euler('xyz', [25, 32, 35], degrees=True).as_matrix()
+    translation = np.array([1.0, 2.0, -2.3])
+    
+    A = Frame()
+    B = Frame.orient_wrt(A, rotation, translation)
+    b2a = CoordinateTransformation.between_frames(from_frame = B, to_frame = A)
+    assert np.all(b2a.translation == translation)
+    assert np.all(b2a.rotation == rotation)
+
+
 
 def test_frame_construction_id():
     rotation = Rotation.from_euler('xyz', np.random.rand(3)*2*np.pi).as_matrix()
@@ -73,14 +85,37 @@ def test_coordinate_transformation():
     A = Frame.from_orign_orientation(origin=t1, orientation=U1)
     B = Frame.from_orign_orientation(origin=t2, orientation=U2)
 
-    bTa = CoordinateTransformation.between_frames(A, B)
+    A2B = CoordinateTransformation.between_frames(A, B)
 
-    coord_in_a = np.random.rand(3)
+    coord_in_a = 100*(np.random.rand(3) - 0.5)
     coord_in_global = U1 @ coord_in_a + t1
     coord_in_b = U2.T @ (coord_in_global - t2)
-    coord_in_b2 = bTa @ coord_in_a
+    coord_in_b2 = A2B @ coord_in_a
 
     assert np.all(np.isclose(coord_in_b, coord_in_b2))
+
+def test_coordinate_transformation2():
+    U1 = Rotation.from_euler('xyz', np.random.rand(3)*2*np.pi).as_matrix()
+    U2 = Rotation.from_euler('xyz', np.random.rand(3)*2*np.pi).as_matrix()
+    t1 = np.random.rand(3)*100
+    t2 = np.random.rand(3)*100
+
+    G = Frame() # global coordinate system
+    A = Frame.from_orign_orientation(origin=t1, orientation=U1)
+    B = Frame.from_orign_orientation(origin=t2, orientation=U2)
+    
+
+    coord_in_a = 100*(np.random.rand(3) - 0.5)
+    vec_in_a = SpatialCoordinates(coord_in_a, A)
+    coord_in_global = vec_in_a.express_in(G).coords
+    coord_in_b = vec_in_a.express_in(B).coords
+    
+    coord_in_global2 = A.orientation @ coord_in_a + A.origin
+    coord_in_b2 = B.orientation.T @ (coord_in_global2 - B.origin)
+
+    assert np.all(np.isclose(coord_in_b, coord_in_b2))
+    assert np.all(np.isclose(coord_in_global, coord_in_global2))
+
 
 
 def test_coordinate_transformation():
@@ -119,44 +154,152 @@ def test_spatial_coordinates():
     a_in_B = a_in_A.express_in(B)
     assert np.all(np.isclose(a_in_B.coords, bTa @ a_coords))
 
+def test_coordinate_transformation2():
+    U1 = Rotation.from_euler('xyz', np.random.rand(3)*2*np.pi).as_matrix()
+    U2 = Rotation.from_euler('xyz', np.random.rand(3)*2*np.pi).as_matrix()
+    t1 = np.random.rand(3)*100
+
+    # these two frames have a common origin
+    A = Frame.from_orign_orientation(origin=t1, orientation=U1)
+    B = Frame.from_orign_orientation(origin=t1, orientation=U2)
+    
+    # the relative rotation between these two is:
+    bEa = U2.T @ U1
+    
+    # this transforms from A to B coordinates
+    bTa = CoordinateTransformation.between_frames(A, B)
+    
+    # double check that this transformation still works
+    assert np.all(np.isclose(rot(bEa), bTa.motionTransform.mat))
+    
+    # now let m be a SpatialMotion vector, expressed in Frame A
+    m = SpatialCoordinates(SpatialMotion(np.random.rand(6)), A)
+    
+    # now we will express them in Frame B
+    m_in_b = m.express_in(B)
+    
+    # this subindexing is getting ridiculous lol (but hopefully with the abstraction layer this is not necessary)
+    assert np.all(np.isclose((SpatialMatrix(rot(bEa)) @ m.coords).vec, m_in_b.coords.vec))
+
+
 
 def test_spatial_motion_coordinate_transform1():
     dx = np.array([1.0, 3.0, -2.0])
     ang = np.ones(3)
     lin = np.ones(3)
     m = SpatialMotion.from_angular_linear(ang, lin)
-    m_prime = SpatialMotion.from_angular_linear(ang, lin + np.cross(ang, dx))
+    m_prime = SpatialMotion.from_angular_linear(ang, lin - np.cross(dx, ang))
 
-    A = Frame()
-    B = Frame.orient_wrt(A, translation = -dx)
+    O = Frame.from_orign_orientation(origin = np.array([0.0, 0.0, 1.0]))
+    P = Frame.orient_wrt(O, translation = dx)
 
-    bTa = CoordinateTransformation.between_frames(A, B)
+    bTa = CoordinateTransformation.between_frames(O, P)
     m_prime_coords = bTa @ m
 
     assert np.all(np.isclose(m_prime.vec, m_prime_coords.vec))
 
 
-
 def test_spatial_motion_coordinate_transforms():
-    ang = np.ones(3)
-    lin = np.ones(3)
-    m = SpatialMotion.from_angular_linear(ang, lin)
-
+    U = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
     rotation = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
     translation = np.random.rand(3) * 100
+    O =  50 * (np.random.rand(3) - 0.5)
+    P = O + U @ translation
 
-    G = Frame()
-    A = Frame.orient_wrt(G, rotation, translation)
+    A = Frame.from_orign_orientation(O, U)
+    B = Frame.orient_wrt(A, rotation, translation)
+    assert np.all(np.isclose(B.origin, P)), "Origin of frame B is not at point P"
+    
+    # is the translation from A to B in A's coordinates. That's really good to know.
+    
+    # create the coordinates of m in A
+    ang = np.ones(3)
+    lin = np.ones(3)
+    m_in_A = SpatialMotion.from_angular_linear(ang, lin)
 
     # manually build up the transformation matrix
-    transform = xlt(-translation) @ rot(rotation.T)
-    m_prime = SpatialMotion(transform @ m.vec)
-    m_coord_prime2 = SpatialCoordinates(m_prime, A)
+    # then use formula 2.24 in Featherstone to get the new coordinates
+    # we need:
+    # OP in A's coordinate system, this is the vector r:
+    # the rotation matrix that converts from A to B, that's B.orientation.T @ A.orientation
+    r = U.T @ (P - O)                       # is equal to translation
+    E = B.orientation.T @ A.orientation     # is equalt to rotation.T
+    transform = rot(E) @ xlt(r)
+    m_in_B = SpatialMotion(transform @ m_in_A.vec)
+    m_expressed_B = SpatialCoordinates(m_in_B, B)
 
-    m_coord = SpatialCoordinates(m, G)
-    m_coord_prime = m_coord.express_in(A)
-    #assert m_coord_prime == m_coord_prime2
+    m_expressed_A = SpatialCoordinates(m_in_A, A)
+    m_reexpressed_B = m_expressed_A.express_in(B)
+    assert np.all(np.isclose(m_reexpressed_B.coords.vec, m_expressed_B.coords.vec))
 
+
+def test_spatial_motion_coordinate_transforms2():
+    U = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
+    rotation = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
+    translation = np.random.rand(3) * 100
+    O =  50 * (np.random.rand(3) - 0.5)
+    P = O + U @ translation
+
+    A = Frame.from_orign_orientation(O, U)
+    B = Frame.orient_wrt(A, rotation, translation)
+    assert np.all(np.isclose(B.origin, P)), "Origin of frame B is not at point P"
+    
+    # the conversion between these two frames
+    A2B = B.orientation.T @ A.orientation
+    r_in_B = A2B @ translation
+    
+    # create the coordinates of m in A
+    ang_A = np.ones(3)
+    lin_A = np.ones(3)
+    m_in_A = SpatialMotion.from_angular_linear(ang_A, lin_A)
+    
+    # now let's manually change between frames using normal 3D vectors
+    ang_B = A2B @ ang_A
+    lin_B = A2B @ lin_A + np.cross(ang_B, r_in_B)
+    m_in_B = SpatialMotion.from_angular_linear(ang_B, lin_B)
+    
+    # create the coordinate vector
+    motion_vec = SpatialCoordinates(m_in_A, A)
+    m_in_B2 = motion_vec.express_in(B).coords
+    assert np.all(np.isclose(m_in_B.vec, m_in_B2.vec))
+
+
+
+def test_spatial_force_coordinate_transforms():
+    U = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
+    rotation = Rotation.from_euler('xyz', [23,45,-23], degrees=True).as_matrix()
+    translation = np.random.rand(3) * 100
+    O =  50 * (np.random.rand(3) - 0.5)
+    P = O + U @ translation
+
+    A = Frame.from_orign_orientation(O, U)
+    B = Frame.orient_wrt(A, rotation, translation)
+    assert np.all(np.isclose(B.origin, P)), "Origin of frame B is not at point P"
+    
+    # is the translation from A to B in A's coordinates. That's really good to know.
+    A2B = B.orientation.T @ A.orientation
+    r_in_B = A2B @ translation
+    
+    # create the coordinates of m in A
+    torque_A = np.ones(3)
+    force_A = np.ones(3)
+    f_in_A = SpatialForce.from_angular_linear(torque_A, force_A)
+
+    # let's very manually change the coordinate system here
+    force_B = A2B @ force_A
+    torque_B = A2B @ torque_A - np.cross(r_in_B, force_B)
+    f_in_B = SpatialForce.from_angular_linear(torque_B, force_B)
+    
+    # now let's build the spatial coordinate and test the coords
+    f_coords = SpatialCoordinates(f_in_A, A)
+    f_in_B2 = f_coords.express_in(B).coords 
+    assert np.all(np.isclose(f_in_B.vec, f_in_B2.vec))
+    
+
+
+
+if __name__ == "__main__":
+    test_spatial_force_coordinate_transforms()
 
 
 
