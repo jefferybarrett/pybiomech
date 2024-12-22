@@ -295,11 +295,26 @@ def test_spatial_force_coordinate_transforms():
     f_in_B2 = f_coords.express_in(B).coords 
     assert np.all(np.isclose(f_in_B.vec, f_in_B2.vec))
     
-
+def test_inertia_transform():
+    dx = np.array([1.0, 0.0, 0.0])
+    A = Frame()
+    B = Frame.orient_wrt(A, translation = dx)
+    
+    # assume we just have a sphere
+    mass = 10.23
+    radius = np.pi/8 # m
+    inertia = (2.0/3.0) * mass * radius**2 * np.eye(3)
+    I_in_A = SpatialInertia.from_mass_inertia_about_com(mass, inertia)
+    
+    mass_prime = mass
+    inertia_prime = inertia + mass * (np.dot(dx, dx)*np.eye(3) - np.outer(dx,dx))
+    assert inertia_prime[1,1] == inertia[1,1] + mass * (dx[0]**2 + dx[2]**2)
+    I_in_B = SpatialInertia.from_mass_inertia_about_com(mass_prime, inertia_prime)
+    
+    # this should obey the parallel axis theorem
+    I_vec = SpatialCoordinates(I_in_A, A)
+    I_in_B = I_vec.express_in(B).coords
 
 
 if __name__ == "__main__":
-    test_spatial_force_coordinate_transforms()
-
-
-
+    test_inertia_transform()
