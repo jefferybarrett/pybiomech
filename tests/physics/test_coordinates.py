@@ -296,7 +296,7 @@ def test_spatial_force_coordinate_transforms():
     assert np.all(np.isclose(f_in_B.vec, f_in_B2.vec))
     
 def test_inertia_transform():
-    dx = np.array([1.0, 0.0, 0.0])
+    dx = np.array([-1.0, 0.0, 0.0])
     A = Frame()
     B = Frame.orient_wrt(A, translation = dx)
     
@@ -306,14 +306,17 @@ def test_inertia_transform():
     inertia = (2.0/3.0) * mass * radius**2 * np.eye(3)
     I_in_A = SpatialInertia.from_mass_inertia_about_com(mass, inertia)
     
-    mass_prime = mass
-    inertia_prime = inertia + mass * (np.dot(dx, dx)*np.eye(3) - np.outer(dx,dx))
+    inertia_prime = inertia + mass * (xprod_mat(-dx) @ xprod_mat(-dx).T)
+    off_diagonal = mass * xprod_mat(-dx)
+    coords_in_B = np.block([[inertia_prime, off_diagonal], [-off_diagonal, mass * IDENTITY_3x3]])
     assert inertia_prime[1,1] == inertia[1,1] + mass * (dx[0]**2 + dx[2]**2)
-    I_in_B = SpatialInertia.from_mass_inertia_about_com(mass_prime, inertia_prime)
+    I_in_B = SpatialInertia(coords_in_B) #.from_mass_inertia_about_com(mass_prime, inertia_prime)
     
     # this should obey the parallel axis theorem
     I_vec = SpatialCoordinates(I_in_A, A)
-    I_in_B = I_vec.express_in(B).coords
+    I_in_B2 = I_vec.express_in(B).coords
+
+    assert np.all(np.isclose(I_in_B2.mat, coords_in_B))
 
 
 if __name__ == "__main__":

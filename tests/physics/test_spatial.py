@@ -7,6 +7,18 @@ from pybiomech.physics.spatial import *
 from scipy.spatial.transform import Rotation
 
 
+def test_spatial_inverse_inertia():
+    c = 20 * (np.random.rand(3) - 0.5)
+    mass = 12.34
+    inertia = np.diag([1.0, 2.0, 3.0])
+
+    spatial_inertia = SpatialInertia.from_mass_inertia_about_com(mass, inertia, c)
+    inertia_inv = InverseInertia.from_mass_inertia_about_com(mass, inertia, c)
+
+    assert np.all(np.isclose(inertia_inv.mat, spatial_inertia.inv().mat))
+    assert inertia_inv.is_approximately(spatial_inertia.inv())
+
+
 def test_matrix_negate():
     for _ in range(100):
         A = 100 * (np.random.rand(6,6) - 0.5)

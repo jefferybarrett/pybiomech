@@ -192,7 +192,7 @@ class SpatialMatrix:
         """Check if two SpatialMatrix instances are approximately equal."""
         if not isinstance(other, SpatialMatrix):
             return False
-        return np.allclose(self.data, other.data, rtol=rtol, atol=atol)
+        return np.allclose(self.mat, other.mat, rtol=rtol, atol=atol) and (self.domain == other.domain) and (self.range == other.range)
 
 
 class SpatialInertia(SpatialMatrix):
@@ -201,13 +201,27 @@ class SpatialInertia(SpatialMatrix):
         super().__init__(mat, domain = SpatialMotion, range = SpatialForce)
 
     @classmethod
-    def from_mass_inertia_about_com(cls, mass, inertia_tensor):
+    def from_mass_inertia_about_com(cls, mass, inertia_tensor, c = ZERO3):
         """ This will construct a SpatialInertia where mass is its mass and inertia tensor
         is its inertia tensor evalauted about its centre of mass.
         """
-        mat = np.block([[inertia_tensor, np.zeros((3,3))], [np.zeros((3,3)), mass * np.eye(3)]])
-        return SpatialInertia(mat)
+        cx = xprod_mat(c)
+        Ic = inertia_tensor + mass * (cx @ cx.T)
+        diag_portion = mass * cx
+        mat = np.block([[Ic, diag_portion], [-diag_portion, mass * np.eye(3)]])
+        return cls(mat)
+
+class InverseInertia(SpatialMatrix):
+
+    def __init__(self, mat=np.eye(6)):
+        super().__init__(mat, domain = SpatialForce, range = SpatialMotion)
     
+    @classmethod
+    def from_mass_inertia_about_com(cls, mass, inertia_tensor, c = ZERO3):
+        cx = xprod_mat(c)
+        Ic_inv = np.linalg.inv(inertia_tensor)
+        mat = np.block([[Ic_inv, Ic_inv @ cx.T], [cx @ Ic_inv, (1/mass) * np.eye(3) + cx @ Ic_inv @ cx.T]])
+        return cls(mat)
 
 
 
