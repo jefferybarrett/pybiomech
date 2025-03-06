@@ -8,7 +8,7 @@ class SpatialVector:
         assert len(vec) == 6, "A SpatialVector must have 6 components."
         self.vec = np.array(vec, dtype=float)
         self.domain = SpatialVector
-
+    
     @classmethod
     def from_angular_linear(cls, angular, linear):
         """Create a SpatialVector from linear and angular components."""
