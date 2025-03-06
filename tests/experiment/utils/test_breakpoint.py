@@ -41,6 +41,27 @@ def test_piecewise_linear():
 
     print("All piecewise_linear tests passed!")
 
+def test_piecewise_linear_negative():
+    """Tests piecewise_linear with negative x and y values, ensuring correct y-intercept handling."""
+
+    # Define x values including negative numbers and 0 (to check the intercept)
+    x = np.array([-5, -3, 0, 2, 5])  
+
+    # Define known breakpoints, slopes, and y-intercept
+    breakpoints = [-2, 3]  # Slope changes at x = -2 and x = 3
+    slopes = [-1, 2, -0.5]  # Slopes before and after breakpoints
+    y_intercept = -4  # This should apply at x = 0
+
+    # Manually compute expected values
+    expected = np.array([-5, -7, -4, 0, 1])
+
+    # Check that the computed values match the expected values
+    np.testing.assert_allclose(piecewise_linear(x, breakpoints, slopes, y_intercept), expected, atol=1e-5)
+
+    print("Test passed: piecewise_linear correctly handles negative values and y-intercept at x=0!")
+
+
+
 
 def test_objective_function():
     """Test the objective_function against known values and edge cases."""
@@ -216,7 +237,29 @@ def test_breakpoint_analysis():
 
     print("All breakpoint_analysis tests passed!")
 
+def test_breakpoint_analysis_negative():
+    """Tests breakpoint_analysis with negative x and y values."""
+
+    # Define a piecewise function with negative slopes and negative x-values
+    x = np.linspace(-10, 10, 200)  # Extend x into negative range
+    true_breakpoints = [-4.0, 3.0]  # Known x-values where slopes change
+    true_slopes = [-2.0, 0.5, 1.5]  # Slopes before and after breakpoints
+
+    # Generate piecewise linear data
+    y = piecewise_linear(x, true_breakpoints, true_slopes, b=-5.0)
+
+    # Run breakpoint analysis
+    b0, estimated_breakpoints, estimated_slopes = breakpoint_analysis(x, y, n=2, show_plots=False, verbose=False)
+
+    # Test breakpoints are roughly correct
+    np.testing.assert_allclose(estimated_breakpoints, true_breakpoints, atol=0.5)
+
+    # Test slopes are reasonable
+    np.testing.assert_allclose(estimated_slopes, true_slopes, atol=0.5)
+
+    print("Test passed: Negative values correctly handled in breakpoint_analysis!")
+
 
 # Run the test if executed as a script
 if __name__ == "__main__":
-    test_piecewise_linear()
+    test_piecewise_linear_negative()

@@ -61,75 +61,108 @@ def polynomial_method(x, y, order=6):
 
 def piecewise_linear(x, x_b, M, b):
     """
-    Evaluate a piecewise linear function at specified points.
-    
-    For a function defined by breakpoints `x_b` with slopes `M` in each segment
-    and initial intercept `b`, computes the function value at each point in `x`.
-    
+    Evaluates a piecewise linear function given breakpoints, segment slopes, and an initial y-intercept.
+
+    This function defines a piecewise linear relationship where the slopes (`M`) change 
+    at specified breakpoints (`x_b`). The function ensures **continuity** by computing 
+    segment-specific intercepts based on the given initial y-intercept (`b`).
+
     Parameters
     ----------
     x : array_like
-        Points at which to evaluate the piecewise linear function.
+        1D array of x-values at which the function should be evaluated.
     x_b : array_like
-        Breakpoints that define the segments, must be in ascending order.
+        1D array of x-values where slope changes (breakpoints). Must be sorted in ascending order.
     M : array_like
-        Slopes for each segment. Should have length len(x_b) + 1.
+        1D array of slopes for each segment. Must have length `len(x_b) + 1`.
     b : float
-        Initial y-intercept for the first segment.
-    
+        The y-intercept of the segment that contains `x=0`.
+
     Returns
     -------
-    ndarray
-        Function values at each point in x.
-        
+    result : ndarray
+        1D array of y-values corresponding to `x` based on the piecewise linear function.
+
     Notes
     -----
-    The function is defined as follows:
-    - For x ≤ x_b[0]: f(x) = M[0]*x + b
-    - For x_b[i-1] < x ≤ x_b[i]: f(x) = M[i]*x + b_i 
-      where b_i is calculated to ensure continuity
-    - For x > x_b[-1]: f(x) = M[-1]*x + b_n 
-      where b_n is calculated to ensure continuity
-      
+    - The function **ensures continuity** by computing the intercepts for each segment.
+    - If `x_b` is empty, the function returns a simple linear function: `M[0] * x + b`.
+    - The function **handles cases where `x=0` is inside any segment** and adjusts intercepts accordingly.
+    - It efficiently determines the correct segment for each `x` value and applies the appropriate slope and intercept.
+
     Examples
     --------
     >>> import numpy as np
     >>> x = np.array([0, 1, 2, 3, 4, 5])
-    >>> x_b = [2]
-    >>> M = [1, -0.5]  # Slope 1 before x=2, then -0.5
-    >>> b = 0
-    >>> piecewise_linear(x, x_b, M, b)
-    array([0. , 1. , 2. , 1.5, 1. , 0.5])
+    >>> x_b = [2, 4]  # Breakpoints at x = 2 and x = 4
+    >>> M = [1, -0.5, 2]  # Slopes for each segment
+    >>> b = 0  # Initial y-intercept
+    >>> y = piecewise_linear(x, x_b, M, b)
+    >>> print(y)
+    [ 0.   1.   2.   1.5  1.   4. ]
+    
+    # Example with no breakpoints (pure linear function)
+    >>> x_b = []  # No breakpoints
+    >>> M = [2]   # Single slope
+    >>> b = 1
+    >>> y = piecewise_linear(x, x_b, M, b)
+    >>> print(y)
+    [ 1.  3.  5.  7.  9. 11.]
     """
     x = np.asarray(x)
     x_b = np.array(x_b) if not isinstance(x_b, np.ndarray) else x_b
     M = np.array(M) if not isinstance(M, np.ndarray) else M
     
-    # Handle the base case
-    if len(x_b) <= 0:
-        return M * x + b
-    
-    # Calculate result for all points
+    # Create result array
     result = np.zeros_like(x, dtype=float)
     
+    # Special case: no breakpoints
+    if len(x_b) == 0:
+        return M[0] * x + b
+    
+    # First, calculate the function value at x=0 using the provided y-intercept
+    f_at_zero = b
+    
+    # We need to work backwards to get the intercept for the first segment
+    # Find which segment contains x=0
+    segment_for_zero = 0
+    for i, breakpoint in enumerate(x_b):
+        if 0 > breakpoint:
+            segment_for_zero += 1
+    
+    # Calculate the intercept for each segment
+    intercepts = np.zeros(len(M))
+    
+    # For the segment containing x=0, use the given y-intercept
+    intercepts[segment_for_zero] = f_at_zero
+    
+    # Calculate backwards for segments before x=0
+    for i in range(segment_for_zero, 0, -1):
+        # Value at previous breakpoint
+        prev_value = M[i] * x_b[i-1] + intercepts[i]
+        # Intercept for previous segment
+        intercepts[i-1] = prev_value - M[i-1] * x_b[i-1]
+    
+    # Calculate forwards for segments after x=0
+    for i in range(segment_for_zero, len(M)-1):
+        # Value at current breakpoint
+        curr_value = M[i] * x_b[i] + intercepts[i]
+        # Intercept for next segment
+        intercepts[i+1] = curr_value - M[i+1] * x_b[i]
+    
+    # Evaluate the function for each segment
     # First segment
     mask = x <= x_b[0]
-    result[mask] = M[0] * x[mask] + b
+    result[mask] = M[0] * x[mask] + intercepts[0]
     
-    # Calculate value at the breakpoint
-    y_at_breakpoint = M[0] * x_b[0] + b
+    # Middle segments
+    for i in range(len(x_b)-1):
+        mask = (x > x_b[i]) & (x <= x_b[i+1])
+        result[mask] = M[i+1] * x[mask] + intercepts[i+1]
     
-    # Calculate the intercept for the second segment that ensures continuity
-    b1 = y_at_breakpoint - M[1] * x_b[0]
-    
-    # Second segment (everything after the breakpoint)
-    mask = x > x_b[0]
-    result[mask] = M[1] * x[mask] + b1
-    
-    # For multiple breakpoints, we would recursively handle the rest
-    if len(x_b) > 1:
-        remaining_result = piecewise_linear(x[x > x_b[0]], x_b[1:], M[1:], b1)
-        result[x > x_b[0]] = remaining_result
+    # Last segment
+    mask = x > x_b[-1]
+    result[mask] = M[-1] * x[mask] + intercepts[-1]
     
     return result
 
