@@ -447,8 +447,8 @@ def _initial_guess(x, y, n = 2):
     # Estimate `n` breakpoints using max orthogonal distance criterion
     x0, y0 = _breakpoint_guess(x, y, n, [], [])
 
-    # First segment's y-intercept
-    b0 = y0[0]
+    # estimate the overall y-intrcept
+    b0 = np.interp(0.0, x, y)#y0[0]
 
     # Compute slopes for each segment using finite differences
     m_v = np.diff(y0) / np.diff(x0)
